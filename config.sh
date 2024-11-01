@@ -20,11 +20,14 @@
 ########################################################################
 
 # Kernel Name
-export IMAGE_NAME="Placeholder"
+export IMAGE_NAME="placeholder"
 
 # Platform
 export PLATFORM_BUILD="Placeholder" # ex: exynos9810, exynos9820, exynos9830, exynos9840
 export PLATFORM_ARCH="Placeholder" # choice: exynos, qualcomm, mediatek
+
+# Local Version
+export LOCALVERSION="-$IMAGE_NAME"
 
 ###########################################################################################################################
 # Toolchains
@@ -53,9 +56,13 @@ export CCACHE="ccache"
 export ARCH=arm64
 export SUBARCH=arm64
 
-# aarch64 GCC Cross Compiler (Should be GCC 14 or later but U can try with GCC 4.9 too) 
+# aarch64 Cross Compiler
 # Some compilers such as EvaGCC mentioned in Toolchain list have different GCC Binary name, for example EvaGCC is "aarch64-elf-"
 export CROSS_COMPILE="$CCACHE $TC"
+
+# X86 Compiler
+export CC="$CCACHE gcc"  # GCC for C
+export CXX="g++" # GCC for C++
 
 # Some Samsung Shenanigans
 export ANDROID_MAJOR_VERSION=q # q is for android 10, put as per your device's android release, so if your device released with A11 put "r"
@@ -105,10 +112,14 @@ export KERNEL=$DIR/arch/$ARCH/boot/Image
 export DEV_DTB="arch/$ARCH/boot/dts/$PLATFORM_ARCH/$DEV_AD"
 
 # defconfig dir
-export DEFCONFIG=$DIR/arch/$ARCH/configs
+export DEFCONFIG="$DIR/arch/$ARCH/configs"
+
+# Custom defconfig
+export TARGET_CUSTOM_DEFCONFIG_PATH="$DEFCONFIG/$IMAGE_NAME"
+export TARGET_CUSTOM_DEFCONFIG="$IMAGE_NAME"
 
 # Unset some vars for Make Boot.img
-unset TARGET_MAKE_BOOTIMG
+unset TARGET_MAKE_INSTALL
 
 ########################################################################
 #                                                                      #

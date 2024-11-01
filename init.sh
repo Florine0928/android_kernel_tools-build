@@ -28,6 +28,14 @@ if [ ! -d "Toolchain" ]; then
 fi
 
 #############################################
+# X86 Specific                              #
+#############################################
+
+x86_init() {
+    unset CROSS_COMPILE
+}
+
+#############################################
 # Source the variables from the config file #
 source ./config.sh                          #
 #############################################
@@ -37,10 +45,11 @@ usage() {
     echo "Usage: $0 [-b <device>] (-m <clean/dirty>)"
     echo "Example Usage: $0 -d $DEV_AC -t gcc -m dirty -e"
     echo "Options:"
-    echo "  -b          Build Kernel for $DEV_AC,$DEV_BC,$DEV_CC"
+    echo "  -b          Build Kernel for $DEV_AC,$DEV_BC,$DEV_CC,X86_64"
+    echo "  -e          Install kernel or create boot.img if android (grub / boot)"
+    echo "  -d          Use custom defconfig"
     echo "  -m          Build Mode (clean / dirty)"
     echo "  -t          Toolchain for building"
-    echo "  -e          Make boot.img"
     echo "  -h          Display this help message"
     echo "Available Toolchains:"
     echo "   1: $TC_A"
@@ -49,7 +58,7 @@ usage() {
 }
 
 # Parse options
-while getopts "em:b:t:h" opt; do
+while getopts "dm:b:e:t:h" opt; do
     case $opt in
         b)
             arg=$OPTARG  # Capture the argument for -b
@@ -69,13 +78,30 @@ while getopts "em:b:t:h" opt; do
                 export DEVICE=$DEV_C
                 export DEV_DTB=$DEV_CD
                 export IMG_OUT="$IMAGE_NAME-$arg-$PLATFORM_BUILD" # boot.img name
+            elif [[ "$arg" == "X86_64" ]]; then
+                echo "Building kernel for: $arg"
+                export DEVICE="X86_64"
+                export ARCH="x86"
+                export SUBARCH="x86"
+                export TARGET_CUSTOM_DEFCONFIG_PATH="$DIR/arch/$ARCH/configs/$IMAGE_NAME"
+                x86_init
             else            
                 echo "Invalid argument for -b: promptly exiting.."
                 exit
             fi
             ;;
         e)
-                export TARGET_MAKE_BOOTIMG="true"
+            arg4=$OPTARG  # Capture the argument for -e
+            export TARGET_MAKE_INSTALL="true"
+            if [[ $arg4 == "grub" ]] && [[ $DEVICE == "X86_64" ]]; then
+                export TARGET_MAKE_INSTALL_GRUB="true"
+                export TARGET_MAKE_INSTALL="true"
+            elif [[ $arg4 == "boot" ]] && [[ $DEVICE != "X86_64" ]]; then
+                export TARGET_MAKE_INSTALL="true"
+            else
+                echo "Invalid argument for -e: promptly exiting.."
+                exit
+            fi
             ;;
         m)
             arg2=$OPTARG  # Capture the argument for -m
@@ -86,7 +112,6 @@ while getopts "em:b:t:h" opt; do
                 # This is used for when we build kernel
             elif [[ "$arg2" == "dirty" ]]; then
                 export MODE="dirty"
-
             else            
                 echo "invalid argument for -m: defaulting to dirty"
                 export MODE="dirty"
@@ -96,6 +121,10 @@ while getopts "em:b:t:h" opt; do
         h)
             # Print Help Option (ex: ./init.sh -h)
             usage
+            ;;
+        d)
+            export TARGET_CUSTOM_DEFCONFIG_VAR="true"    
+            echo "BUILDSYSTEM: Using custom defconfig"        
             ;;
         t)
             arg3=$OPTARG  # Capture the argument for -t
@@ -134,9 +163,31 @@ fi
 # Functions for Building the Kernel                                    # 
 ########################################################################
 
+# Cleanup defconfigs
+cleanup_arm_defconfig() {
+    if [ -e "$TARGET_CUSTOM_DEFCONFIG_PATH" ]; then
+        rm $TARGET_CUSTOM_DEFCONFIG_PATH
+    fi
+}
+
+# Populate defconfig
+populate_arm_defconfig() {
+    touch "$DEFCONFIG/temp_defconfig"
+    cat $DEVICE >> "$DEFCONFIG/temp_defconfig"
+    cat $TARGET_CUSTOM_DEFCONFIG_PATH >> "$DEFCONFIG/temp_defconfig"
+}
+
 # Build Defconfig for Device
 defconfig() {
-make $DEVICE
+    if [[ "$DEVICE" != "X86_64" ]] && [[ "$TARGET_CUSTOM_DEFCONFIG_VAR" != "true" ]]; then
+        make $DEVICE
+    elif [[ "$DEVICE" != "X86_64" ]] && [[ "$TARGET_CUSTOM_DEFCONFIG_VAR" == "true" ]]; then
+        cleanup_arm_defconfig
+        populate_arm_defconfig
+        make temp_defconfig # combination device + custom defconfig
+    elif [[ "$DEVICE" == "X86_64" ]] && [[ "$TARGET_CUSTOM_DEFCONFIG_VAR" == "true" ]]; then
+        make menuconfig
+    fi
 }
 
 # Build Kernel
@@ -144,6 +195,12 @@ build() {
     #If in dirty mode then make kernel while not cleaning workdir 
     make -j$(nproc)
     # If not in dirty mode a extra function with be invoked, refer to func/build_clean at line #145
+}
+
+build_modules() {
+    if [[ "$DEVICE" == "X86_64" ]]; then
+        make modules -j$(nproc)
+    fi
 }
 
 build_clean() {
@@ -209,10 +266,17 @@ defconfig
 # Make Kernel
 build
 
-if [[ "$TARGET_MAKE_BOOTIMG" == "true" ]]; then
-# Creates boot.img which will appear in E9K-Tools/Product folder
-PACK_BOOT_IMG
-else
-echo "WARNING: A BOOT.IMG WON'T BE CREATED"
-fi
+# X86: Build modules
+build_modules
 
+if [[ $TARGET_MAKE_INSTALL == "true" ]]; then
+    if [[ $DEVICE == "X86_64" ]]; then
+        sudo make install
+        sudo make modules_install
+        if [[ "$TARGET_MAKE_INSTALL_GRUB" == "true" ]]; then
+            sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+        fi
+    else
+        PACK_BOOT_IMG
+    fi
+fi

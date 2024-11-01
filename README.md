@@ -1,12 +1,14 @@
 
-# android_kernel_tools-build
-## Tool for building the Android Kernel (Pre-GKI)
+# android_linux_kernel_tools-build
+## Tool for building the Linux Kernel and ACK 4.19<
 ## Features
 
 - Build Android kernel (Pre-5.4)
+- Build X86 Linux Kernel
 - Support multiple compilers (GCC based only for now)
 - Build in clean or dirty mode
 - Pack boot.img for you (Optional)
+- Install Linux Kernel for you (Optional)
 - Written in bash at 3AM
 
 
@@ -15,15 +17,16 @@
 ## Example Usage
 
 ```bash
-./init.sh -b device -m clean -t gcc -e
+./init.sh -b device -m clean -t gcc -e 
+./init.sh -b X86_64 -m clean -e grub -d
 ```
 ## Documentation
 The script is pretty documented already if you read it, its fairly simple, all you need to do is set the required variables in ./config.sh file according to your device.
-- For usage documentation: ./init.sh -h
+
 
 
 ## Dependencies
-- gcc, ccache, bash, linux
+- gcc, ccache, bash, linux, ncurses
 ## Installation
 
 
